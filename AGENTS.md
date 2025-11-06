@@ -39,29 +39,71 @@ let api_token = std::env::var("BEM_API_TOKEN")
 
 ### Current Implementation Status
 
-#### `bem events get :id`
-**Status**: To be implemented  
-**Purpose**: Retrieve event details by ID from bem.ai API  
-**Input**: Event ID (positional argument)  
-**Output**: Pretty-printed JSON to stdout
-
-**Requirements**:
-- Accept event ID as a command-line argument
-- Make API request to bem.ai events endpoint
-- Output response as formatted JSON
-- Handle errors gracefully
+#### `bem get :id`
+**Status**: ✅ Implemented  
+**Purpose**: Universal command to retrieve any resource by ID (auto-detects type from prefix)  
+**Input**: Resource ID (positional argument)  
+**Output**: Pretty-printed JSON to stdout  
+**Supported Prefixes**:
+- `evt_` - Routes to events API
+- `tr_` - Routes to transformations API
 
 **Example Usage**:
 ```bash
+export BEM_API_TOKEN="your_api_key"
+bem get evt_abc123
+bem get tr_2bxoJPNdSD4LgRT4YVC4gt72hlI
+```
+
+**Notes**:
+- This is a convenience command that automatically routes to the appropriate endpoint based on ID prefix
+- Returns an error if the ID doesn't start with a recognized prefix
+- The specific `bem events get` and `bem transformations get` commands are still available
+
+#### `bem events get :id`
+**Status**: ✅ Implemented  
+**Purpose**: Retrieve event details by ID from bem.ai API  
+**Input**: Event ID (positional argument)  
+**Output**: Pretty-printed JSON to stdout  
+**API Endpoint**: `GET https://api.bem.ai/v1-alpha/events/:id`
+
+**Example Usage**:
+```bash
+export BEM_API_TOKEN="your_api_key"
 bem events get abc123
 ```
 
 **Expected Output**:
 ```json
 {
-  "id": "abc123",
+  "eventID": "abc123",
   "status": "completed",
   ...
+}
+```
+
+#### `bem transformations get :id`
+**Status**: ✅ Implemented  
+**Purpose**: Retrieve transformation details by ID from bem.ai API  
+**Input**: Transformation ID (positional argument)  
+**Output**: Pretty-printed JSON to stdout  
+**API Endpoint**: `GET https://api.bem.ai/v1-beta/transformations?transformationIDs=:id`
+
+**Example Usage**:
+```bash
+export BEM_API_TOKEN="your_api_key"
+bem transformations get tr_2bxoJPNdSD4LgRT4YVC4gt72hlI
+```
+
+**Expected Output**:
+```json
+{
+  "transformations": [
+    {
+      "transformationID": "tr_2bxoJPNdSD4LgRT4YVC4gt72hlI",
+      ...
+    }
+  ]
 }
 ```
 
