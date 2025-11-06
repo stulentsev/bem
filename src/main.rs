@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use serde_json::Value;
+use std::path::PathBuf;
 
 const API_BASE_URL: &str = "https://api.bem.ai/v1-alpha";
 
@@ -74,9 +75,35 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+fn get_api_token() -> Result<String> {
+    // First check if already set in environment
+    if let Ok(token) = std::env::var("BEM_API_TOKEN") {
+        return Ok(token);
+    }
+
+    // Try to load from ~/.bemrc
+    let home_dir = std::env::var("HOME")
+        .context("Could not determine home directory")?;
+    let bemrc_path = PathBuf::from(home_dir).join(".bemrc");
+
+    if bemrc_path.exists() {
+        // Load .bemrc into environment
+        dotenvy::from_path(&bemrc_path).ok();
+        
+        // Check again after loading
+        if let Ok(token) = std::env::var("BEM_API_TOKEN") {
+            return Ok(token);
+        }
+    }
+
+    anyhow::bail!(
+        "BEM_API_TOKEN not found in environment and ~/.bemrc does not exist or does not contain BEM_API_TOKEN. \
+        Please set BEM_API_TOKEN environment variable or create ~/.bemrc with BEM_API_TOKEN=<token>"
+    )
+}
+
 async fn get_event(event_id: &str) -> Result<()> {
-    let api_token = std::env::var("BEM_API_TOKEN")
-        .context("BEM_API_TOKEN environment variable must be set")?;
+    let api_token = get_api_token()?;
 
     let url = format!("{}/events/{}", API_BASE_URL, event_id);
     
@@ -109,8 +136,7 @@ async fn get_event(event_id: &str) -> Result<()> {
 }
 
 async fn get_transformation(transformation_id: &str) -> Result<()> {
-    let api_token = std::env::var("BEM_API_TOKEN")
-        .context("BEM_API_TOKEN environment variable must be set")?;
+    let api_token = get_api_token()?;
 
     let url = format!("https://api.bem.ai/v1-beta/transformations?transformationIDs={}", transformation_id);
     
