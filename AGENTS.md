@@ -107,6 +107,49 @@ bem transformations get tr_2bxoJPNdSD4LgRT4YVC4gt72hlI
 }
 ```
 
+#### `bem eval :transformation_id`
+**Status**: ✅ Implemented  
+**Purpose**: Retrieve evaluation results for a transformation  
+**Input**: Transformation ID (positional argument)  
+**Output**: Pretty-printed JSON to stdout (extracts only the specific transformation's result)  
+**API Endpoint**: `GET https://api.bem.ai/v1-beta/transformations/eval/results?transformationIDs=:id`
+
+**Example Usage**:
+```bash
+export BEM_API_TOKEN="your_api_key"
+bem eval tr_2bxoJPNdSD4LgRT4YVC4gt72hlI
+```
+
+**Expected Output**:
+```json
+{
+  "fieldMetrics": {
+    "/companyName": {
+      "confidenceScore": 0.95,
+      "reasoning": "Company name is clearly stated in the document header",
+      "hallucination": false,
+      "relevanceScore": 1
+    },
+    "/totalAmount": {
+      "confidenceScore": 0.88,
+      "reasoning": "Amount is extracted from the invoice total line",
+      "hallucination": false,
+      "relevanceScore": 0.95
+    }
+  },
+  "overallConfidence": 0.935,
+  "runtime": 1.23,
+  "hasHallucinations": false,
+  "evaluationVersion": "0.1.0-gemini",
+  "createdAt": "2024-01-15T10:30:00Z"
+}
+```
+
+**Notes**:
+- Automatically extracts the specific transformation's result from the API's multi-object response
+- Returns an error if the evaluation is pending or has failed
+- Currently supports single transformation only (API supports multiple)
+
 ## Development Guidelines
 
 ### Code Style

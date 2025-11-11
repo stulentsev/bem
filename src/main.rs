@@ -20,6 +20,11 @@ enum Commands {
         /// Resource ID to retrieve
         id: String,
     },
+    /// Get evaluation results for a transformation
+    Eval {
+        /// Transformation ID to get evaluation results for
+        transformation_id: String,
+    },
     /// Manage events
     Events {
         #[command(subcommand)]
@@ -64,6 +69,7 @@ async fn main() -> Result<()> {
                 anyhow::bail!("Unknown ID prefix. Expected 'evt_' for events or 'tr_' for transformations");
             }
         },
+        Commands::Eval { transformation_id } => get_eval_results(&transformation_id).await?,
         Commands::Events { action } => match action {
             EventsAction::Get { id } => get_event(&id).await?,
         },
@@ -175,4 +181,64 @@ async fn get_transformation(transformation_id: &str) -> Result<()> {
     println!("{}", pretty_json);
 
     Ok(())
+}
+
+async fn get_eval_results(transformation_id: &str) -> Result<()> {
+    let api_token = get_api_token()?;
+
+    let url = format!(
+        "https://api.bem.ai/v1-beta/transformations/eval/results?transformationIDs={}",
+        transformation_id
+    );
+    
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .header("x-api-key", api_token)
+        .send()
+        .await
+        .context("Failed to send request to bem.ai API")?;
+
+    let status = response.status();
+    
+    if !status.is_success() {
+        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        anyhow::bail!("API request failed with status {}: {}", status, error_text);
+    }
+
+    let json: Value = response
+        .json()
+        .await
+        .context("Failed to parse JSON response")?;
+
+    // Check if the transformation result is in the "results" map
+    if let Some(results) = json["results"].as_object() {
+        if let Some(result) = results.get(transformation_id) {
+            let pretty_json = serde_json::to_string_pretty(result)
+                .context("Failed to format JSON")?;
+            println!("{}", pretty_json);
+            return Ok(());
+        }
+    }
+
+    // Check if transformation is pending
+    if let Some(pending) = json["pending"].as_array() {
+        for item in pending {
+            if item["transformationId"].as_str() == Some(transformation_id) {
+                anyhow::bail!("Evaluation is still pending for transformation: {}", transformation_id);
+            }
+        }
+    }
+
+    // Check if transformation failed
+    if let Some(failed) = json["failed"].as_array() {
+        for item in failed {
+            if item["transformationId"].as_str() == Some(transformation_id) {
+                let error_msg = item["errorMessage"].as_str().unwrap_or("unknown error");
+                anyhow::bail!("Evaluation failed for transformation {}: {}", transformation_id, error_msg);
+            }
+        }
+    }
+
+    anyhow::bail!("No evaluation result found for transformation: {}", transformation_id);
 }
