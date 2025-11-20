@@ -1,59 +1,12 @@
-use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
-use serde_json::Value;
-use std::path::PathBuf;
+mod cli;
+mod commands;
+mod config;
 
-const API_BASE_URL: &str = "https://api.bem.ai/v1-alpha";
+use anyhow::Result;
+use clap::Parser;
 
-#[derive(Parser)]
-#[command(name = "bem")]
-#[command(about = "CLI for interacting with bem.ai API", long_about = None)]
-struct Cli {
-    #[command(subcommand)]
-    command: Commands,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    /// Get resource by ID (auto-detects type from prefix: evt_, tr_)
-    Get {
-        /// Resource ID to retrieve
-        id: String,
-    },
-    /// Get evaluation results for a transformation
-    Eval {
-        /// Transformation ID to get evaluation results for
-        transformation_id: String,
-    },
-    /// Manage events
-    Events {
-        #[command(subcommand)]
-        action: EventsAction,
-    },
-    /// Manage transformations
-    Transformations {
-        #[command(subcommand)]
-        action: TransformationsAction,
-    },
-}
-
-#[derive(Subcommand)]
-enum EventsAction {
-    /// Get event details by ID
-    Get {
-        /// Event ID to retrieve
-        id: String,
-    },
-}
-
-#[derive(Subcommand)]
-enum TransformationsAction {
-    /// Get transformation details by ID
-    Get {
-        /// Transformation ID to retrieve
-        id: String,
-    },
-}
+use crate::cli::{Cli, Commands, EventsAction, TransformationsAction};
+use crate::commands::{get_eval_results, get_event, get_transformation};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -66,9 +19,11 @@ async fn main() -> Result<()> {
             } else if id.starts_with("tr_") {
                 get_transformation(&id).await?;
             } else {
-                anyhow::bail!("Unknown ID prefix. Expected 'evt_' for events or 'tr_' for transformations");
+                anyhow::bail!(
+                    "Unknown ID prefix. Expected 'evt_' for events or 'tr_' for transformations"
+                );
             }
-        },
+        }
         Commands::Eval { transformation_id } => get_eval_results(&transformation_id).await?,
         Commands::Events { action } => match action {
             EventsAction::Get { id } => get_event(&id).await?,
@@ -79,166 +34,4 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
-}
-
-fn get_api_token() -> Result<String> {
-    // First check if already set in environment
-    if let Ok(token) = std::env::var("BEM_API_TOKEN") {
-        return Ok(token);
-    }
-
-    // Try to load from ~/.bemrc
-    let home_dir = std::env::var("HOME")
-        .context("Could not determine home directory")?;
-    let bemrc_path = PathBuf::from(home_dir).join(".bemrc");
-
-    if bemrc_path.exists() {
-        // Load .bemrc into environment
-        dotenvy::from_path(&bemrc_path).ok();
-        
-        // Check again after loading
-        if let Ok(token) = std::env::var("BEM_API_TOKEN") {
-            return Ok(token);
-        }
-    }
-
-    anyhow::bail!(
-        "BEM_API_TOKEN not found in environment and ~/.bemrc does not exist or does not contain BEM_API_TOKEN. \
-        Please set BEM_API_TOKEN environment variable or create ~/.bemrc with BEM_API_TOKEN=<token>"
-    )
-}
-
-async fn get_event(event_id: &str) -> Result<()> {
-    let api_token = get_api_token()?;
-
-    let url = format!("{}/events/{}", API_BASE_URL, event_id);
-    
-    let client = reqwest::Client::new();
-    let response = client
-        .get(&url)
-        .header("x-api-key", api_token)
-        .send()
-        .await
-        .context("Failed to send request to bem.ai API")?;
-
-    let status = response.status();
-    
-    if !status.is_success() {
-        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-        anyhow::bail!("API request failed with status {}: {}", status, error_text);
-    }
-
-    let json: Value = response
-        .json()
-        .await
-        .context("Failed to parse JSON response")?;
-
-    let pretty_json = serde_json::to_string_pretty(&json)
-        .context("Failed to format JSON")?;
-
-    println!("{}", pretty_json);
-
-    Ok(())
-}
-
-async fn get_transformation(transformation_id: &str) -> Result<()> {
-    let api_token = get_api_token()?;
-
-    let url = format!("https://api.bem.ai/v1-beta/transformations?transformationIDs={}", transformation_id);
-    
-    let client = reqwest::Client::new();
-    let response = client
-        .get(&url)
-        .header("x-api-key", api_token)
-        .send()
-        .await
-        .context("Failed to send request to bem.ai API")?;
-
-    let status = response.status();
-    
-    if !status.is_success() {
-        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-        anyhow::bail!("API request failed with status {}: {}", status, error_text);
-    }
-
-    let json: Value = response
-        .json()
-        .await
-        .context("Failed to parse JSON response")?;
-
-    let transformations = json["transformations"]
-        .as_array()
-        .context("Response does not contain 'transformations' array")?;
-
-    if transformations.is_empty() {
-        anyhow::bail!("No transformation found with ID: {}", transformation_id);
-    }
-
-    let transformation = &transformations[0];
-    let pretty_json = serde_json::to_string_pretty(transformation)
-        .context("Failed to format JSON")?;
-
-    println!("{}", pretty_json);
-
-    Ok(())
-}
-
-async fn get_eval_results(transformation_id: &str) -> Result<()> {
-    let api_token = get_api_token()?;
-
-    let url = format!(
-        "https://api.bem.ai/v1-beta/transformations/eval/results?transformationIDs={}",
-        transformation_id
-    );
-    
-    let client = reqwest::Client::new();
-    let response = client
-        .get(&url)
-        .header("x-api-key", api_token)
-        .send()
-        .await
-        .context("Failed to send request to bem.ai API")?;
-
-    let status = response.status();
-    
-    if !status.is_success() {
-        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-        anyhow::bail!("API request failed with status {}: {}", status, error_text);
-    }
-
-    let json: Value = response
-        .json()
-        .await
-        .context("Failed to parse JSON response")?;
-
-    // Check if the transformation result is in the "results" map
-    if let Some(results) = json["results"].as_object() {
-        if let Some(result) = results.get(transformation_id) {
-            let pretty_json = serde_json::to_string_pretty(result)
-                .context("Failed to format JSON")?;
-            println!("{}", pretty_json);
-            return Ok(());
-        }
-    }
-
-    // Check if transformation is pending
-    if let Some(pending) = json["pending"].as_array() {
-        for item in pending {
-            if item["transformationId"].as_str() == Some(transformation_id) {
-                anyhow::bail!("Evaluation is still pending for transformation: {}", transformation_id);
-            }
-        }
-    }
-
-    // Check if transformation failed
-    if let Some(failed) = json["failed"].as_array() {
-        for item in failed {
-            if item["transformationId"].as_str() == Some(transformation_id) {
-                let error_msg = item["errorMessage"].as_str().unwrap_or("unknown error");
-                anyhow::bail!("Evaluation failed for transformation {}: {}", transformation_id, error_msg);
-            }
-        }
-    }
-
-    anyhow::bail!("No evaluation result found for transformation: {}", transformation_id);
 }
