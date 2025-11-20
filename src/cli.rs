@@ -22,6 +22,7 @@ pub enum Commands {
         transformation_id: String,
     },
     /// Get transformations by reference IDs
+    #[command(name = "getref", alias = "get-ref")]
     GetRef {
         /// Reference IDs to retrieve (can be provided multiple times)
         #[arg(value_name = "REFERENCE", num_args = 0..)]
