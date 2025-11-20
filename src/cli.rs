@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "bem")]
@@ -19,6 +20,18 @@ pub enum Commands {
     Eval {
         /// Transformation ID to get evaluation results for
         transformation_id: String,
+    },
+    /// Get transformations by reference IDs
+    GetRef {
+        /// Reference IDs to retrieve (can be provided multiple times)
+        #[arg(value_name = "REFERENCE", num_args = 0..)]
+        references: Vec<String>,
+        /// File containing newline-delimited reference IDs
+        #[arg(short, long, value_name = "FILE")]
+        file: Option<PathBuf>,
+        /// Emit JSON Lines instead of a single JSON array
+        #[arg(long)]
+        jsonl: bool,
     },
     /// Manage events
     Events {

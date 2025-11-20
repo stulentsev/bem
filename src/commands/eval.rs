@@ -34,13 +34,12 @@ pub async fn get_eval_results(transformation_id: &str) -> Result<()> {
         .await
         .context("Failed to parse JSON response")?;
 
-    if let Some(results) = json["results"].as_object() {
-        if let Some(result) = results.get(transformation_id) {
-            let pretty_json =
-                serde_json::to_string_pretty(result).context("Failed to format JSON")?;
-            println!("{}", pretty_json);
-            return Ok(());
-        }
+    if let Some(results) = json["results"].as_object()
+        && let Some(result) = results.get(transformation_id)
+    {
+        let pretty_json = serde_json::to_string_pretty(result).context("Failed to format JSON")?;
+        println!("{}", pretty_json);
+        return Ok(());
     }
 
     if let Some(pending) = json["pending"].as_array() {

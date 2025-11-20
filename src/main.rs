@@ -6,7 +6,9 @@ use anyhow::Result;
 use clap::Parser;
 
 use crate::cli::{Cli, Commands, EventsAction, TransformationsAction};
-use crate::commands::{get_eval_results, get_event, get_transformation};
+use crate::commands::{
+    get_eval_results, get_event, get_transformation, get_transformations_by_reference,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -25,6 +27,11 @@ async fn main() -> Result<()> {
             }
         }
         Commands::Eval { transformation_id } => get_eval_results(&transformation_id).await?,
+        Commands::GetRef {
+            references,
+            file,
+            jsonl,
+        } => get_transformations_by_reference(references, file, jsonl).await?,
         Commands::Events { action } => match action {
             EventsAction::Get { id } => get_event(&id).await?,
         },
